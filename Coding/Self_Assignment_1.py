@@ -28,7 +28,11 @@ class FastFuriousEnv(gym.Env):
             "Brian": np.array([6, 6])
         }  # Initial positions for two agents
         self.goal_state = np.array([3, 3])  # Single goal position
-        self.buildings = [np.array([3, 4]), np.array([4, 3]), np.array([2, 2])]  # Static buildings
+        self.buildings = [
+            {"position": np.array([3, 4]), "image": 'building1.png'},
+            {"position": np.array([4, 3]), "image": 'building2.png'},
+            {"position": np.array([2, 2]), "image": 'building3.png'}
+        ]  # Static buildings with different images
         self.police_states = [np.array([3, 0]), np.array([0, 3])]  # Initial positions for police
         self.action_space = gym.spaces.Discrete(4)  # Four possible actions: up, down, left, right
         self.observation_space = gym.spaces.Box(low=0, high=self.grid_size - 1, shape=(2,), dtype=np.int64)
@@ -36,8 +40,14 @@ class FastFuriousEnv(gym.Env):
         self.car_images = {
             "Dom": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/dom_car.png'),
             "Brian": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/brian_car.png'),
-            "Police": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/police_car.png')
+            "Police": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/police_car.png'),
         }
+        self.building_images = {
+            "building1": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/building1.png'),
+            "building2": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/building2.png'),
+            "building3": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/building3.png'),
+        }
+        self.finish_line_image = mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/finish_line.png')  # Load finish line image
         plt.show(block=False)
 
     def reset(self):
@@ -72,8 +82,9 @@ class FastFuriousEnv(gym.Env):
         dones = {}
 
         # Define the penalties
-        building_penalty = -2
-        police_penalty = -1
+        building_penalty = -3
+        police_penalty = -2
+        agent_collision_penalty = -1
 
         # Move police randomly
         for i, police_state in enumerate(self.police_states):
@@ -100,18 +111,20 @@ class FastFuriousEnv(gym.Env):
                 new_state[0] += 1
 
             # Check for collisions
-            if any(np.array_equal(new_state, bldg) for bldg in self.buildings):
+            if any(np.array_equal(new_state, bldg["position"]) for bldg in self.buildings):
                 reward = building_penalty
                 done = False
-                info = {"Collision": "Building"}
+                info = {"Accident with Building"}
             elif any(np.array_equal(new_state, police_state) for police_state in self.police_states):
                 reward = police_penalty
-                done = False
-                info = {"Collision": "Police"}
+                done = True
+                info = {"Arrested by Police rest Positon"}
+                # Reset the agent's position
+                self.agent_states[agent] = np.array([0, 0]) if agent == "Dom" else np.array([6, 6])
             elif any(np.array_equal(new_state, other_state) for other_agent, other_state in self.agent_states.items() if other_agent != agent):
-                reward = police_penalty
+                reward = agent_collision_penalty
                 done = False
-                info = {"Collision": "Other Agent"}
+                info = {"Accident with other Agent"}
             else:
                 self.agent_states[agent] = new_state
                 reward = 0
@@ -138,21 +151,18 @@ class FastFuriousEnv(gym.Env):
         for police_state in self.police_states:
             police_image = self.car_images["Police"]
             self.ax.imshow(police_image, extent=(police_state[0] - 0.5, police_state[0] + 0.5, police_state[1] - 0.5, police_state[1] + 0.5))
-        self.ax.plot(self.goal_state[0], self.goal_state[1], "g+", label="Goal")  # Goal
+        self.ax.imshow(self.finish_line_image, extent=(self.goal_state[0] - 0.5, self.goal_state[0] + 0.5, self.goal_state[1] - 0.5, self.goal_state[1] + 0.5))  # Finish Line
         for bldg in self.buildings:
-            self.ax.plot(bldg[0], bldg[1], "ks")  # Buildings
+            building_image = self.building_images[bldg["image"].split('.')[0]]
+            self.ax.imshow(building_image, extent=(bldg["position"][0] - 0.5, bldg["position"][0] + 0.5, bldg["position"][1] - 0.5, bldg["position"][1] + 0.5))  # Buildings
 
-        # Create custom legend handles
-        dom_handle = mpatches.Patch(color='white', label='Dom')
-        brian_handle = mpatches.Patch(color='white', label='Brian')
-        police_handle = mpatches.Patch(color='white', label='Police')  # Police legend
-        goal_handle = mlines.Line2D([], [], color='green', marker='+', linestyle='None', markersize=10, label='Goal')
-
-        self.ax.legend(handles=[dom_handle, brian_handle, police_handle, goal_handle], loc='upper right')
+        # Turn off the axis
+        self.ax.axis('off')
 
         self.ax.set_xlim(-1, self.grid_size)
         self.ax.set_ylim(-1, self.grid_size)
         self.ax.set_aspect("equal")
+
         plt.pause(0.1)
 
     def close(self):
