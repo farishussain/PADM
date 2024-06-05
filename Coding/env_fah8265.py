@@ -2,51 +2,47 @@ import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
-import matplotlib.patches as mpatches
-import matplotlib.lines as mlines
 
 class FastFuriousEnv(gym.Env):
     """
     Custom Environment for a Fast and Furious inspired game.
 
-    Agents Dom and Brian must navigate a grid to reach a goal while avoiding buildings and police cars.
+    Agent Dom must navigate a grid to reach a goal while avoiding buildings and collecting power-ups.
     """
 
-    def __init__(self, grid_size=7, num_police=2):
+    def __init__(self, grid_size=7, level=1):
         """
         Initialize the environment.
 
         Parameters:
         grid_size (int): The size of the grid.
-        num_police (int): The number of police cars in the environment.
+        level (int): The level of the game.
         """
         super().__init__()
         self.grid_size = grid_size
-        self.num_police = num_police
+        self.level = level
         self.agent_states = {
-            "Dom": np.array([0, 0]),
-            "Brian": np.array([6, 6])
-        }  # Initial positions for two agents
-        self.goal_state = np.array([3, 3])  # Single goal position
+            "Dom": np.array([0, 0])
+        }  # Initial position for the agent
+        self.goal_state = np.array([grid_size // 2, grid_size // 2])  # Goal position changes with level
         self.buildings = [
             {"position": np.array([3, 4]), "image": 'building1.png'},
             {"position": np.array([4, 3]), "image": 'building2.png'},
             {"position": np.array([2, 2]), "image": 'building3.png'}
         ]  # Static buildings with different images
-        self.police_states = [np.array([3, 0]), np.array([0, 3])]  # Initial positions for police
+        self.power_ups = [np.array([2, 5]), np.array([5, 2])]  # Positions for power-ups
         self.action_space = gym.spaces.Discrete(4)  # Four possible actions: up, down, left, right
         self.observation_space = gym.spaces.Box(low=0, high=self.grid_size - 1, shape=(2,), dtype=np.int64)
         self.fig, self.ax = plt.subplots()
         self.car_images = {
-            "Dom": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/dom_car.png'),
-            "Brian": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/brian_car.png'),
-            "Police": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/police_car.png'),
+            "Dom": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/dom_car.png')
         }
         self.building_images = {
             "building1": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/building1.png'),
             "building2": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/building2.png'),
             "building3": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/building3.png'),
         }
+        self.power_up_image = mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/power_up.png')
         self.finish_line_image = mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/Coding/finish_line.png')  # Load finish line image
         plt.show(block=False)
 
@@ -55,90 +51,81 @@ class FastFuriousEnv(gym.Env):
         Reset the environment to its initial state.
 
         Returns:
-        dict: The initial states of the agents.
+        dict: The initial states of the agent.
         """
         self.agent_states = {
-            "Dom": np.array([0, 0]),
-            "Brian": np.array([6, 6])
-        }  # Reset initial positions for two agents
-        self.police_states = [np.array([3, 0]), np.array([0, 3])]  # Reset police positions
+            "Dom": np.array([0, 0])
+        }  # Reset initial position for the agent
+        self.power_ups = [np.array([2, 5]), np.array([5, 2])]  # Reset power-ups
         return self.agent_states
 
-    def step(self, actions):
+    def step(self, action):
         """
         Execute actions and return the new state, reward, done, and info.
 
         Parameters:
-        actions (dict): A dictionary with agents' actions.
+        action (int): The action for the agent.
 
         Returns:
-        dict: The new states of the agents.
-        dict: The rewards for each agent.
-        dict: Whether the episode is done for each agent.
+        dict: The new states of the agent.
+        dict: The rewards for the agent.
+        bool: Whether the episode is done.
         dict: Additional information.
         """
-        rewards = {}
-        infos = {}
-        dones = {}
+        reward = 0
+        done = False
+        info = {}
 
-        # Define the penalties
+        # Define the penalties and rewards
         building_penalty = -3
-        police_penalty = -2
-        agent_collision_penalty = -1
+        power_up_reward = 5
 
-        # Move police randomly
-        for i, police_state in enumerate(self.police_states):
-            direction = np.random.choice(['up', 'down', 'left', 'right'])
-            if direction == 'up' and police_state[1] < self.grid_size - 1:
-                self.police_states[i][1] += 1
-            elif direction == 'down' and police_state[1] > 0:
-                self.police_states[i][1] -= 1
-            elif direction == 'left' and police_state[0] > 0:
-                self.police_states[i][0] -= 1
-            elif direction == 'right' and police_state[0] < self.grid_size - 1:
-                self.police_states[i][0] += 1
+        # Process agent's action
+        new_state = self.agent_states["Dom"].copy()
+        if action == 0 and new_state[1] < self.grid_size - 1:  # up
+            new_state[1] += 1
+        elif action == 1 and new_state[1] > 0:  # down
+            new_state[1] -= 1
+        elif action == 2 and new_state[0] > 0:  # left
+            new_state[0] -= 1
+        elif action == 3 and new_state[0] < self.grid_size - 1:  # right
+            new_state[0] += 1
 
-        # Process agents' actions
-        for agent, action in actions.items():
-            new_state = self.agent_states[agent].copy()
-            if action == 0 and new_state[1] < self.grid_size - 1:  # up
-                new_state[1] += 1
-            elif action == 1 and new_state[1] > 0:  # down
-                new_state[1] -= 1
-            elif action == 2 and new_state[0] > 0:  # left
-                new_state[0] -= 1
-            elif action == 3 and new_state[0] < self.grid_size - 1:  # right
-                new_state[0] += 1
-
-            # Check for collisions
-            if any(np.array_equal(new_state, bldg["position"]) for bldg in self.buildings):
-                reward = building_penalty
-                done = False
-                info = {"Accident with Building"}
-            elif any(np.array_equal(new_state, police_state) for police_state in self.police_states):
-                reward = police_penalty
-                done = False
-                info = {"Arrested by Police rest Position"}
-                # Reset the agent's position
-                self.agent_states[agent] = np.array([0, 0]) if agent == "Dom" else np.array([6, 6])
-            elif any(np.array_equal(new_state, other_state) for other_agent, other_state in self.agent_states.items() if other_agent != agent):
-                reward = agent_collision_penalty
-                done = False
-                info = {"Accident with other Agent"}
-            else:
-                self.agent_states[agent] = new_state
+        # Check for collisions with buildings and power-ups
+        if any(np.array_equal(new_state, bldg["position"]) for bldg in self.buildings):
+            reward = building_penalty
+            done = False
+            info = {"Accident with Building"}
+        elif any(np.array_equal(new_state, pu) for pu in self.power_ups):
+            reward = power_up_reward
+            self.power_ups = [pu for pu in self.power_ups if not np.array_equal(new_state, pu)]  # Remove collected power-up
+            done = False
+            info = {"Powers":"Collected Power-Up"}
+            distance_to_goal = np.linalg.norm(self.goal_state - new_state)
+            info.update({"Distance to Goal": distance_to_goal})
+        else:
+            # Check if the new state is within the grid boundaries
+            if (0 <= new_state[0] < self.grid_size) and (0 <= new_state[1] < self.grid_size):
+                self.agent_states["Dom"] = new_state
                 reward = 0
-                done = np.array_equal(new_state, self.goal_state)
-                if done:
+                # Check if all power-ups are collected and Dom has reached the goal
+                if np.array_equal(new_state, self.goal_state) and len(self.power_ups) == 0:
                     reward = 10
+                    done = True
+                    info = {"Goal Reached": True}
+                elif np.array_equal(new_state, self.goal_state):
+                    reward = 0
+                    done = False
+                    info = {"Goal Reached without collecting all Power-Ups": False}
                 distance_to_goal = np.linalg.norm(self.goal_state - new_state)
-                info = {"Distance to Goal": distance_to_goal}
+                info.update({"Distance to Goal": distance_to_goal})
+            else:
+                # Agent attempted to move out of bounds
+                reward = -5  # Penalty for attempting to move out of bounds
+                done = False
+                info = {"Attempted to move out of bounds"}
 
-            rewards[agent] = reward
-            dones[agent] = done
-            infos[agent] = info
-
-        return self.agent_states, rewards, dones, infos
+        return self.agent_states["Dom"], reward, done, info
 
     def render(self):
         """
@@ -148,13 +135,12 @@ class FastFuriousEnv(gym.Env):
         for agent, state in self.agent_states.items():
             car_image = self.car_images[agent]
             self.ax.imshow(car_image, extent=(state[0] - 0.5, state[0] + 0.5, state[1] - 0.5, state[1] + 0.5))
-        for police_state in self.police_states:
-            police_image = self.car_images["Police"]
-            self.ax.imshow(police_image, extent=(police_state[0] - 0.5, police_state[0] + 0.5, police_state[1] - 0.5, police_state[1] + 0.5))
         self.ax.imshow(self.finish_line_image, extent=(self.goal_state[0] - 0.5, self.goal_state[0] + 0.5, self.goal_state[1] - 0.5, self.goal_state[1] + 0.5))  # Finish Line
         for bldg in self.buildings:
             building_image = self.building_images[bldg["image"].split('.')[0]]
             self.ax.imshow(building_image, extent=(bldg["position"][0] - 0.5, bldg["position"][0] + 0.5, bldg["position"][1] - 0.5, bldg["position"][1] + 0.5))  # Buildings
+        for pu in self.power_ups:
+            self.ax.imshow(self.power_up_image, extent=(pu[0] - 0.5, pu[0] + 0.5, pu[1] - 0.5, pu[1] + 0.5))  # Power-Ups
 
         # Turn off the axis
         self.ax.axis('off')
@@ -173,19 +159,13 @@ class FastFuriousEnv(gym.Env):
 
 if __name__ == "__main__":
     env = FastFuriousEnv(grid_size=7)  # Initialize with custom grid size
-    states = env.reset()
+    state = env.reset()
     for _ in range(500):
-        actions = {
-            "Dom": env.action_space.sample(),
-            "Brian": env.action_space.sample()
-        }  # Sample random actions for both agents
-        states, rewards, dones, infos = env.step(actions)
+        action = env.action_space.sample()  # Sample random action for the agent
+        state, reward, done, info = env.step(action)
         env.render()
-        print(f"States: {states}, Rewards: {rewards}, Done: {any(dones.values())}, Infos: {infos}")
-        if any(dones.values()):
-            if dones["Dom"]:
-                print("Dom wins, Brian loses!")
-            elif dones["Brian"]:
-                print("Brian wins, Dom loses!")
+        print(f"State: {state}, Reward: {reward}, Done: {done}, Info: {info}")
+        if done:
+            print("Dom wins!")
             break
     env.close()
