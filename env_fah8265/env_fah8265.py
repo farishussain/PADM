@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from gymnasium import spaces
 
-class PADMEnv(gym.Env):
+class PadmEnv(gym.Env):
     """
     Custom Environment for a PADM course completion simulation.
-    The student must attend lectures and labs, complete assignments, presentations, and give an exam while avoiding blockers.
+    The student must attend lectures (states), complete assignments, give presentation, and give an exam while avoiding deregistration (blocker).
     """
 
     def __init__(self, grid_size=7):
@@ -16,29 +16,35 @@ class PADMEnv(gym.Env):
         Parameters:
         grid_size (int): The size of the grid.
         """
-        super(PADMEnv, self).__init__()
-        self.grid_size = grid_size
-        self.student_state = np.array([0, 0])  # Initial position for the student
-        self.goal_state = np.array([grid_size // 2, grid_size // 2])  # Goal position
+        super(PadmEnv, self).__init__()
+        self.grid_size = grid_size  # Size of the grid
+        self.student_state = np.array([0, 0])  # Initial position of the student
+        self.goal_state = np.array([grid_size // 2, grid_size // 2])  # Position of the exam (goal)
+        
+        # Define the blockers in the environment
         self.blockers = [
             {"position": np.array([3, 4]), "image": 'Cancel'}
-        ]  # Static blockers
+        ]
+        
+        # Define tasks with their positions and rewards
         self.tasks = [
             {"position": np.array([2, 5]), "reward": 20, "name": "Assignment 1"},
             {"position": np.array([5, 2]), "reward": 10, "name": "Assignment 2"},
             {"position": np.array([4, 3]), "reward": 30, "name": "Presentation"}
-        ]  # Tasks with different rewards
+        ]
+        
+        # Define the action and observation spaces
         self.action_space = spaces.Discrete(4)  # Four possible actions: up, down, left, right
         self.observation_space = spaces.Box(low=0, high=self.grid_size - 1, shape=(2,), dtype=np.int64)
         
-        # Load images
-        self.student_image = mpimg.imread('Coding/student.png')
+        # Load images for the student, blockers, tasks, presentation, and exam
+        self.student_image = mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/env_fah8265/student.png')
         self.blocker_images = {
-            "Cancel": mpimg.imread('Coding/Cancel.png')
+            "Cancel": mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/env_fah8265/Cancel.png')
         }
-        self.task_image = mpimg.imread('Coding/assignment.png')
-        self.presentation_image = mpimg.imread('Coding/presentation.png')
-        self.finish_line_image = mpimg.imread('Coding/exam.png')
+        self.task_image = mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/env_fah8265/assignment.png')
+        self.presentation_image = mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/env_fah8265/presentation.png')
+        self.finish_line_image = mpimg.imread('C:/Users/FarisHussain/OneDrive/Doc/Ingolstadt/THI/PADM/env_fah8265/exam.png')
 
         # Initialize plot
         self.fig, self.ax = plt.subplots()
@@ -50,12 +56,14 @@ class PADMEnv(gym.Env):
         Returns:
         np.array: The initial state of the student.
         """
-        self.student_state = np.array([0, 0])  # Reset initial position for the student
+        self.student_state = np.array([0, 0])  # Reset initial position of the student
+        
+        # Reset tasks
         self.tasks = [
             {"position": np.array([2, 5]), "reward": 20, "name": "Assignment 1"},
             {"position": np.array([5, 2]), "reward": 10, "name": "Assignment 2"},
             {"position": np.array([4, 3]), "reward": 30, "name": "Presentation"}
-        ]  # Reset tasks
+        ]
         return self.student_state
 
     def step(self, action):
@@ -71,8 +79,8 @@ class PADMEnv(gym.Env):
         """
         reward = 0
         done = False
-        days_to_exam = int(np.linalg.norm(self.student_state - self.goal_state))
-        info = {"Days to Exam": days_to_exam}
+        days_to_exam = int(np.linalg.norm(self.student_state - self.goal_state))  # Calculate days to exam based on distance
+        info = {"days_to_exam": days_to_exam}
 
         # Define the penalties and rewards
         blocker_penalty = -3
@@ -90,10 +98,10 @@ class PADMEnv(gym.Env):
 
         # Check for collisions with blockers
         if any(np.array_equal(new_state, blk["position"]) for blk in self.blockers):
-            reward = blocker_penalty
+            reward = blocker_penalty  # Penalty for hitting a blocker
             done = False
             days_to_exam = int(np.linalg.norm(self.student_state - self.goal_state))
-            info = {"Blocked": "Deregistered from Exam", "Days to Exam": days_to_exam}
+            info = {"blocked": "deregistered from exam", "days_to_exam": days_to_exam}
         else:
             # Check if the new state is within the grid boundaries
             if (0 <= new_state[0] < self.grid_size) and (0 <= new_state[1] < self.grid_size):
@@ -103,28 +111,28 @@ class PADMEnv(gym.Env):
                 completed_task_index = None
                 for idx, task in enumerate(self.tasks):
                     if np.array_equal(new_state, task["position"]):
-                        reward += task["reward"]
+                        reward += task["reward"]  # Reward for completing the task
                         completed_task_index = idx
                         days_to_exam = int(np.linalg.norm(self.student_state - self.goal_state))
-                        info = {"Task Completed": task["name"], "Days to Exam": days_to_exam}
+                        info = {"task_completed": task["name"], "days_to_exam": days_to_exam}
                         break
                 if completed_task_index is not None:
                     del self.tasks[completed_task_index]
                 # Check if all tasks are completed and student has reached the examination
                 if np.array_equal(new_state, self.goal_state) and len(self.tasks) == 0:
-                    reward += 50
+                    reward += 50  # Bonus reward for completing all tasks and reaching the goal
                     done = True
                     days_to_exam = int(np.linalg.norm(self.student_state - self.goal_state))
-                    info = {"Course Completed": True, "Days to Exam": days_to_exam}
+                    info = {"course_completed": True, "days_to_exam": days_to_exam}
                 elif np.array_equal(new_state, self.goal_state):
                     done = False
                     days_to_exam = int(np.linalg.norm(self.student_state - self.goal_state))
-                    info = {"Examination without completing all Tasks": False, "Days to Exam": days_to_exam}
+                    info = {"examination_without_completing_all_tasks": False, "days_to_exam": days_to_exam}
             else:
                 # Student attempted to move out of bounds
                 reward = -5  # Penalty for attempting to move out of bounds
                 done = False
-                info = {"Attempted to move out of bounds"}
+                info = {"attempted_to_move_out_of_bounds"}
 
         return self.student_state, reward, done, info
 
@@ -147,6 +155,7 @@ class PADMEnv(gym.Env):
         # Turn off the axis
         self.ax.axis('off')
 
+        # Set axis limits
         self.ax.set_xlim(-1, self.grid_size)
         self.ax.set_ylim(-1, self.grid_size)
         self.ax.set_aspect("equal")
@@ -159,8 +168,10 @@ class PADMEnv(gym.Env):
         """
         plt.close()
 
+### Main loop to run the environment
+
 if __name__ == "__main__":
-    env = PADMEnv(grid_size=7)  # Initialize with custom grid size
+    env = PadmEnv()  # Initialize with custom grid size
     state = env.reset()
     for _ in range(500):
         action = env.action_space.sample()  # Sample random action for the student
