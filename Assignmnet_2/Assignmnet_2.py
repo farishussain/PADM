@@ -20,15 +20,36 @@ for danger_state in danger_states:
     V[danger_state] = -1
 
 def get_next_state(state, action):
-    i, j = state
-    if action == 'Up':
-        return (max(i-1, 1), j)
-    elif action == 'Down':
-        return (min(i+1, size), j)
-    elif action == 'Left':
-        return (i, max(j-1, 1))
-    elif action == 'Right':
-        return (i, min(j+1, size))
+    if state in danger_states:
+        i, j = state
+        if action == 'Up':
+            return (max(i, 1), j)
+        elif action == 'Down':
+            return (min(i, size), j)
+        elif action == 'Left':
+            return (i, max(j, 1))
+        elif action == 'Right':
+            return (i, min(j, size))
+    elif state == goal_state:
+        i, j = state
+        if action == 'Up':
+            return (max(i, 1), j)
+        elif action == 'Down':
+            return (min(i, size), j)
+        elif action == 'Left':
+            return (i, max(j, 1))
+        elif action == 'Right':
+            return (i, min(j, size))
+    else:
+        i, j = state
+        if action == 'Up':
+            return (max(i-1, 1), j)
+        elif action == 'Down':
+            return (min(i+1, size), j)
+        elif action == 'Left':
+            return (i, max(j-1, 1))
+        elif action == 'Right':
+            return (i, min(j+1, size))
 
 def get_transition_states(state, action):
     intended = get_next_state(state, action)
